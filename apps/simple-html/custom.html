@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<title>Stellarium Web Engine - Minimal Fullscreen Moon View</title>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+
+<style>
+  html, body, #app, #stel {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: black;
+    overflow: hidden;
+  }
+  #stel {
+    position: relative;
+  }
+  canvas#stel-canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+  /* Hide UI elements */
+  .v-app-bar, .v-footer, .v-navigation-drawer {
+    display: none !important;
+  }
+</style>
+
+<div id="app">
+  <v-app>
+    <div id="stel">
+      <canvas id="stel-canvas"></canvas>
+    </div>
+  </v-app>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vuetify/dist/vuetify.js"></script>
+<script src="https://unpkg.com/i18next/dist/umd/i18next.min.js"></script>
+<script src="https://www.unpkg.com/i18next-xhr-backend/dist/umd/i18nextXHRBackend.min.js"></script>
+<script src="../../build/stellarium-web-engine.js"></script>
+
+<script>
+  i18next.use(i18nextXHRBackend).init({
+    lng: 'en',
+    ns: ['gui', 'skyculture'],
+    debug: false,
+    backend: {
+      loadPath: 'https://stellarium.sfo2.cdn.digitaloceanspaces.com/i18n/v1/{{ns}}/{{lng}}.json'
+    }
+  });
+
+  function getBaseUrl() {
+    let url = document.location.href.split('/');
+    url.pop();
+    url = url.join('/');
+    return url + '/';
+  }
+
+  new Vue({
+    vuetify: new Vuetify({ theme: { dark: true } }),
+    el: '#app',
+    data: { stel: null },
+    mounted() {
+      const that = this;
+      StelWebEngine({
+        wasmFile: '../../build/stellarium-web-engine.wasm',
+        canvas: document.getElementById('stel-canvas'),
+        translateFn(domain, str) {
+          return i18next.t(str, { ns: domain });
+        },
+        onReady(stel) {
+          that.stel = stel;
+
+          const baseUrl = getBaseUrl() + '../test-skydata/';
+
+          // Load data sources
+          stel.core.stars.addDataSource({ url: baseUrl + 'stars' });
+          stel.core.skycultures.addDataSource({ url: baseUrl + 'skycultures/western', key: 'western' });
+          stel.core.dsos.addDataSource({ url: baseUrl + 'dso' });
+          stel.core.landscapes.addDataSource({ url: baseUrl + 'landscapes/guereins', key: 'guereins' });
+          stel.core.milkyway.addDataSource({ url: baseUrl + 'surveys/milkyway' });
+          stel.core.minor_planets.addDataSource({ url: baseUrl + 'mpcorb.dat', key: 'mpc_asteroids' });
+          stel.core.planets.addDataSource({ url: baseUrl + 'surveys/sso/moon', key: 'moon' });
+          stel.core.planets.addDataSource({ url: baseUrl + 'surveys/sso/sun', key: 'sun' });
+          stel.core.planets.addDataSource({ url: baseUrl + 'surveys/sso/moon', key: 'default' });
+          stel.core.comets.addDataSource({ url: baseUrl + 'CometEls.txt', key: 'mpc_comets' });
+          stel.core.satellites.addDataSource({ url: baseUrl + 'tle_satellite.jsonl.gz', key: 'jsonl/sat' });
+
+          // Set observer location to Utrecht
+          stel.core.observer.latitude = 52.07;
+          stel.core.observer.longitude = 5.13;
+          stel.core.observer.elevation = 0;
+
+          // Set current date/time
+          stel.core.date = new Date().toISOString();
+
+          // Point camera at the Moon
+          stel.core.camera.target = 'Moon';
+
+          // Set fonts
+          stel.setFont('regular', 'static/fonts/Roboto-Regular.ttf', 1.38);
+          stel.setFont('bold', 'static/fonts/Roboto-Bold.ttf', 1.38);
+
+          // Request fullscreen on load
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }
+
+          // Force UI update on changes except hover
+          stel.change((obj, attr) => {
+            if (attr !== "hovered") {
+              that.stel = Object.assign(Object.create(stel), {}, stel);
+            }
+          });
+        }
+      });
+    }
+  });
+</script>
